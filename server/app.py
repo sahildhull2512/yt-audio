@@ -1,13 +1,13 @@
 from flask import Flask, request, jsonify, send_from_directory
 import os
 import threading
-from pytube import YouTube
 from openai import OpenAI
 from deep_translator import GoogleTranslator
 from gtts import gTTS
 from pydub import AudioSegment
 import dotenv
 from flask_cors import CORS
+import yt_dlp
 
 dotenv.load_dotenv()
 
@@ -28,6 +28,23 @@ lang_map = {
     'Japanese': 'ja'
 }
 
+
+def download_audio(video_id):
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': os.path.join(TRANSLATIONS_DIR, f"{video_id}.%(ext)s"),
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'quiet': True
+    }
+    url = f"https://www.youtube.com/watch?v={video_id}"
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+
 # Helper function: Add silence
 def add_silence(duration_ms):
     return AudioSegment.silent(duration=duration_ms)
@@ -35,20 +52,29 @@ def add_silence(duration_ms):
 # Core function to process translation
 def process_translation(video_id, language):
     translation_status[(video_id, language)] = "processing"
+    print("Downloading audio...")
+
+    if os.path.exists(os.path.join(TRANSLATIONS_DIR, f"{video_id}_{language}.mp3")):
+        print(f"translated audio already exists for {video_id}")
+        translation_status[(video_id, language)] = "done"
+        return
     
     # 1. Download audio
     try:
-        yt = YouTube(f"https://www.youtube.com/watch?v={video_id}")
-        audio_stream = yt.streams.filter(only_audio=True).first()
-        download_path = os.path.join(TRANSLATIONS_DIR, f"{video_id}.mp4")
-        audio_stream.download(filename=download_path)
-        print(f"Downloaded audio for {video_id}")
+        if os.path.exists(os.path.join(TRANSLATIONS_DIR, f"{video_id}.mp3")):
+            print(f"Audio already exists for {video_id}")
+        else:
+            download_audio(video_id)
+            print(f"Downloaded audio for {video_id}")
     except Exception as e:
         print(f"Error downloading audio: {e}")
         translation_status[(video_id, language)] = "error"
         return
 
+    download_path = os.path.join(TRANSLATIONS_DIR, f"{video_id}.mp3")
+
     # 2. Transcribe
+    print("Transcribing audio...")
     try:
         audio_file = open(download_path, "rb")
         transcript_response = openai_client.audio.transcriptions.create(
@@ -57,28 +83,29 @@ def process_translation(video_id, language):
             response_format="verbose_json"  # To get timestamps
         )
         audio_file.close()
-        segments = transcript_response["segments"]
-        print(f"Transcribed {len(segments)} segments")
+        segments = transcript_response.segments
+        print(f"Transcribed {len(segments)} segments in {transcript_response.duration} seconds")
     except Exception as e:
         print(f"Error transcribing audio: {e}")
         translation_status[(video_id, language)] = "error"
         return
 
     # 3. Translate + 4. TTS + 5. Merge
+    print("Translating and merging...")
     try:
         final_audio = AudioSegment.empty()
         translator = GoogleTranslator(source='en', target=lang_map[language])
 
         for i, seg in enumerate(segments):
             try:
-                start_time = seg['start'] * 1000  # ms
-                end_time = seg['end'] * 1000
+                start_time = seg.start * 1000  # ms
+                end_time = seg.end * 1000
 
-                text = seg['text']
+                text = seg.text
                 translated_text = translator.translate(text)
                 print(f"Translating: {text} -> {translated_text}")
 
-                tts = gTTS(translated_text, lang=language)
+                tts = gTTS(translated_text, lang=lang_map[language])
                 tts_path = os.path.join(TRANSLATIONS_DIR, f"tts_{i}.mp3")
                 tts.save(tts_path)
 
@@ -93,6 +120,7 @@ def process_translation(video_id, language):
                 os.remove(tts_path)  # Clean up intermediate tts files
             except Exception as e:
                 print(f"Error processing segment {i}: {e}")
+                break
                 # Continue with next segment
 
         output_path = os.path.join(TRANSLATIONS_DIR, f"{video_id}_{language}.mp3")
@@ -103,6 +131,8 @@ def process_translation(video_id, language):
     except Exception as e:
         print(f"Error in translation/TTS/merge process: {e}")
         translation_status[(video_id, language)] = "error"
+    
+    print("Translation completed")
 
 
 
