@@ -25,12 +25,139 @@ function insertButton() {
         // Button action
         button.addEventListener('click', (e) => {
             e.preventDefault();
-            alert('Translate button clicked!');
+            showLanguagePopup();
         });
 
         // Insert into the action bar
         actionBar.appendChild(button);
     }
+}
+
+// Function to create and show the language selection popup
+function showLanguagePopup() {
+    // Remove any existing popup
+    const existingPopup = document.getElementById('language-popup');
+    if (existingPopup) {
+        existingPopup.remove();
+    }
+
+    // Create popup container
+    const popup = document.createElement('div');
+    popup.id = 'language-popup';
+    popup.style.position = 'fixed';
+    popup.style.top = '50%';
+    popup.style.left = '50%';
+    popup.style.transform = 'translate(-50%, -50%)';
+    popup.style.backgroundColor = '#212121';
+    popup.style.padding = '20px';
+    popup.style.borderRadius = '8px';
+    popup.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)';
+    popup.style.zIndex = '9999';
+    popup.style.width = '400px';
+    popup.style.color = 'white';
+    popup.style.fontFamily = 'Roboto, Arial, sans-serif';
+
+    // Create close button
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '×';
+    closeButton.style.position = 'absolute';
+    closeButton.style.top = '10px';
+    closeButton.style.right = '10px';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.color = 'white';
+    closeButton.style.fontSize = '24px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.onclick = () => {
+        popup.remove();
+        overlay.remove();
+    };
+    popup.appendChild(closeButton);
+
+    // Create heading
+    const heading = document.createElement('h2');
+    heading.textContent = 'Choose which language you want this video to be translated to:';
+    heading.style.fontSize = '16px';
+    heading.style.marginBottom = '20px';
+    heading.style.fontWeight = 'normal';
+    popup.appendChild(heading);
+
+    // Create language options
+    const languages = ['Hindi', 'Spanish', 'Japanese', 'German'];
+    const optionsContainer = document.createElement('div');
+    optionsContainer.style.display = 'flex';
+    optionsContainer.style.flexDirection = 'column';
+    optionsContainer.style.gap = '12px';
+    optionsContainer.style.marginBottom = '20px';
+
+    let selectedLanguage = null;
+
+    languages.forEach(lang => {
+        const option = document.createElement('label');
+        option.style.display = 'flex';
+        option.style.alignItems = 'center';
+        option.style.cursor = 'pointer';
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'language';
+        radio.value = lang;
+        radio.style.marginRight = '10px';
+        radio.style.cursor = 'pointer';
+        radio.onclick = () => { selectedLanguage = lang; };
+
+        const text = document.createTextNode(lang);
+        text.parentElement = option;
+        option.style.fontSize = '16px';
+
+        option.appendChild(radio);
+        option.appendChild(text);
+        optionsContainer.appendChild(option);
+    });
+
+    popup.appendChild(optionsContainer);
+
+    // Create submit button
+    const submitButton = document.createElement('button');
+    submitButton.textContent = 'Submit';
+    submitButton.style.backgroundColor = '#3ea6ff';
+    submitButton.style.color = 'black';
+    submitButton.style.border = 'none';
+    submitButton.style.borderRadius = '18px';
+    submitButton.style.padding = '8px 16px';
+    submitButton.style.cursor = 'pointer';
+    submitButton.style.float = 'right';
+    submitButton.style.fontWeight = 'bold';
+    submitButton.onclick = () => {
+        if (selectedLanguage) {
+            // Handle the selected language
+            console.log(`Translating to ${selectedLanguage}`);
+            popup.remove();
+            overlay.remove();
+            // Here you would add the actual translation functionality
+        } else {
+            alert('Please select a language');
+        }
+    };
+    popup.appendChild(submitButton);
+
+    // Add overlay
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    overlay.style.zIndex = '9998';
+    overlay.onclick = () => {
+        overlay.remove();
+        popup.remove();
+    };
+
+    // Add to document
+    document.body.appendChild(overlay);
+    document.body.appendChild(popup);
 }
 
 // SPA behavior
