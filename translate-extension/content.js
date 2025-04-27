@@ -158,6 +158,7 @@ function showLanguagePopup() {
                 .then(data => {
                     console.log('Success:', data);
                     // You can handle the response here
+                    startPolling(videoId, selectedLanguage);
                 })
                 .catch(error => {
                     console.error('Error:', error);
@@ -195,6 +196,64 @@ function showLanguagePopup() {
     // Add to document
     document.body.appendChild(overlay);
     document.body.appendChild(popup);
+}
+
+function startPolling(videoId, language) {
+    const pollInterval = 5000; // 5 seconds
+    const maxAttempts = 100;   // Maximum 100 tries (~8 minutes)
+    let attempts = 0;
+
+    const poll = setInterval(() => {
+        attempts++;
+
+        fetch(`http://127.0.0.1:5000/check_status?video_id=${videoId}&language=${language}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Polling status:', data.status);
+                if (data.status === 'done') {
+                    clearInterval(poll);
+                    playTranslatedAudio(videoId, language);
+                } else if (data.status === 'error') {
+                    clearInterval(poll);
+                    alert('Error processing translation.');
+                } else if (attempts > maxAttempts) {
+                    clearInterval(poll);
+                    alert('Translation timed out.');
+                }
+            })
+            .catch(error => {
+                console.error('Polling error:', error);
+                clearInterval(poll);
+                alert('Error while polling translation status.');
+            });
+    }, pollInterval);
+}
+
+function playTranslatedAudio(videoId, language) {
+    const audio = new Audio(`http://127.0.0.1:5000/get_audio?video_id=${videoId}&language=${language}`);
+    audio.crossOrigin = "anonymous";
+
+    // Mute the YouTube video
+    const videoPlayer = document.querySelector('video');
+    if (videoPlayer) {
+        videoPlayer.muted = true;
+
+        // Sync audio start
+        audio.currentTime = videoPlayer.currentTime;
+        audio.play();
+
+        // Keep syncing audio every few seconds
+        setInterval(() => {
+            if (!videoPlayer.paused && !audio.paused) {
+                const drift = Math.abs(audio.currentTime - videoPlayer.currentTime);
+                if (drift > 0.5) { // if out of sync by more than 0.5 seconds
+                    audio.currentTime = videoPlayer.currentTime;
+                }
+            }
+        }, 2000);
+    } else {
+        alert('Could not find YouTube video player');
+    }
 }
 
 // SPA behavior
