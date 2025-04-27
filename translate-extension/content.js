@@ -230,30 +230,125 @@ function startPolling(videoId, language) {
 }
 
 function playTranslatedAudio(videoId, language) {
-    const audio = new Audio(`http://127.0.0.1:5000/get_audio?video_id=${videoId}&language=${language}`);
-    audio.crossOrigin = "anonymous";
-
-    // Mute the YouTube video
-    const videoPlayer = document.querySelector('video');
-    if (videoPlayer) {
-        videoPlayer.muted = true;
-
-        // Sync audio start
-        audio.currentTime = videoPlayer.currentTime;
-        audio.play();
-
-        // Keep syncing audio every few seconds
-        setInterval(() => {
-            if (!videoPlayer.paused && !audio.paused) {
-                const drift = Math.abs(audio.currentTime - videoPlayer.currentTime);
-                if (drift > 0.5) { // if out of sync by more than 0.5 seconds
-                    audio.currentTime = videoPlayer.currentTime;
-                }
+    // Clean up any existing audio and listeners
+    if (window.translationState) {
+        const { audio, listeners, syncInterval } = window.translationState;
+        
+        // Remove all event listeners
+        if (listeners) {
+            const videoPlayer = document.querySelector('video');
+            if (videoPlayer) {
+                listeners.forEach(({ element, type, callback }) => {
+                    element.removeEventListener(type, callback);
+                });
             }
-        }, 2000);
-    } else {
-        alert('Could not find YouTube video player');
+        }
+        
+        // Stop any running interval
+        if (syncInterval) {
+            clearInterval(syncInterval);
+        }
+        
+        // Stop audio
+        if (audio) {
+            audio.pause();
+            audio.src = '';
+        }
     }
+    
+    // Initialize state
+    window.translationState = {
+        audio: null,
+        listeners: [],
+        syncInterval: null,
+        videoId,
+        language
+    };
+    
+    const videoPlayer = document.querySelector('video');
+    if (!videoPlayer) {
+        alert('Could not find YouTube video player');
+        return;
+    }
+    
+    // Create new audio element
+    const audio = new Audio();
+    audio.crossOrigin = "anonymous";
+    window.translationState.audio = audio;
+    
+    // Helper function to add and track event listeners
+    function addTrackedListener(element, type, callback) {
+        element.addEventListener(type, callback);
+        window.translationState.listeners.push({ element, type, callback });
+    }
+    
+    // Load audio and set initial state
+    audio.src = `http://127.0.0.1:5000/get_audio?video_id=${videoId}&language=${language}`;
+    audio.load();
+    
+    // Synchronize function - core logic
+    function synchronize(forcePlay = false) {
+        // Only sync if audio is loaded enough
+        if (audio.readyState >= 3) {
+            // Set audio position to match video
+            const videoTime = videoPlayer.currentTime;
+            
+            // If time difference is significant, adjust
+            const timeDiff = Math.abs(audio.currentTime - videoTime);
+            if (timeDiff > 0.2) {
+                console.log(`Adjusting time: video=${videoTime.toFixed(2)}, audio=${audio.currentTime.toFixed(2)}, diff=${timeDiff.toFixed(2)}`);
+                audio.currentTime = videoTime;
+            }
+            
+            // Handle play state
+            if (!videoPlayer.paused && audio.paused) {
+                // Video is playing but audio is paused - play audio
+                audio.play().catch(err => console.error('Error playing audio:', err));
+            } else if (videoPlayer.paused && !audio.paused) {
+                // Video is paused but audio is playing - pause audio
+                audio.pause();
+            } else if (forcePlay && !videoPlayer.paused) {
+                // Force play requested and video is playing
+                audio.play().catch(err => console.error('Error playing audio:', err));
+            }
+        }
+    }
+    
+    // When audio is ready to play
+    addTrackedListener(audio, 'canplay', () => {
+        console.log('Audio can play');
+        synchronize(true);
+    });
+    
+    // Video events
+    addTrackedListener(videoPlayer, 'play', () => {
+        console.log('Video play');
+        synchronize(true);
+    });
+    
+    addTrackedListener(videoPlayer, 'pause', () => {
+        console.log('Video pause');
+        audio.pause();
+    });
+    
+    addTrackedListener(videoPlayer, 'seeking', () => {
+        console.log('Video seeking');
+    });
+    
+    addTrackedListener(videoPlayer, 'seeked', () => {
+        console.log('Video seeked to', videoPlayer.currentTime);
+        synchronize(!videoPlayer.paused);
+    });
+    
+    // Set up continuous synchronization
+    window.translationState.syncInterval = setInterval(() => {
+        if (videoPlayer && !videoPlayer.paused) {
+            synchronize();
+        }
+    }, 250); // Check 4 times per second
+    
+    // Return the audio object for reference
+    return audio;
 }
 
 // SPA behavior
