@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "YouTube Button Adder",
+    "name": "YouTube Translator",
     "version": "1.0",
     "permissions": ["activeTab", "scripting"],
     "web_accessible_resources": [
