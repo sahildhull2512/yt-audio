@@ -130,11 +130,48 @@ function showLanguagePopup() {
     submitButton.style.fontWeight = 'bold';
     submitButton.onclick = () => {
         if (selectedLanguage) {
-            // Handle the selected language
-            console.log(`Translating to ${selectedLanguage}`);
+            // Get the YouTube video ID from the URL
+            const url = window.location.href;
+            const videoId = url.includes('youtube.com/watch?v=') ? 
+                url.split('v=')[1].split('&')[0] : 
+                url.includes('youtu.be/') ? 
+                    url.split('youtu.be/')[1].split('?')[0] : '';
+            
+            if (videoId) {
+                // Send request to localhost:5000
+                fetch('http://localhost:5000/translate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        videoId: videoId,
+                        language: selectedLanguage
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Success:', data);
+                    // You can handle the response here
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error sending translation request');
+                });
+                
+                console.log(`Translating video ${videoId} to ${selectedLanguage}`);
+            } else {
+                console.error('Could not extract video ID');
+                alert('Could not identify the video');
+            }
+            
             popup.remove();
             overlay.remove();
-            // Here you would add the actual translation functionality
         } else {
             alert('Please select a language');
         }
