@@ -1,0 +1,18 @@
+{
+    "manifest_version": 3,
+    "name": "YouTube Button Adder",
+    "version": "1.0",
+    "permissions": ["activeTab", "scripting"],
+    "web_accessible_resources": [
+      {
+        "resources": ["button.svg"],
+        "matches": ["https://www.youtube.com/*"]
+      }
+    ],
+    "content_scripts": [
+      {
+        "matches": ["https://www.youtube.com/*"],
+        "js": ["content.js"]
+      }
+    ]
+  }
